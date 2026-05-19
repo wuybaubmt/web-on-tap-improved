@@ -1,0 +1,53 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================
+    // USERS - Mỗi user chỉ read/write data của mình
+    // ============================================
+    match /users/{userId} {
+      allow read, write: if request.auth.uid == userId;
+      
+      match /progress/{document=**} {
+        allow read, write: if request.auth.uid == userId;
+      }
+      
+      match /exams/{document=**} {
+        allow read, write: if request.auth.uid == userId;
+      }
+    }
+    
+    // ============================================
+    // TOPICS - Public read, Admin write
+    // ============================================
+    match /ChuDe/{topicId} {
+      allow read: if true; // Everyone can read
+      allow write: if isAdmin(); // Only admins
+      
+      match /DanhSachCauHoi/{questionId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
+    }
+    
+    // ============================================
+    // ANALYTICS - Append-only, user writes own
+    // ============================================
+    match /analytics/{userId}/{document=**} {
+      allow write: if request.auth.uid == userId && isValidAnalytics();
+      allow read: if request.auth.uid == userId || isAdmin();
+    }
+    
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    function isValidAnalytics() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['timestamp', 'userId', 'action']);
+    }
+  }
+}
